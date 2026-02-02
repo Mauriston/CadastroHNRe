@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Cadastro Médico</title>
+
+    <!-- PWA / Mobile Web App Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cadastro Médico">
+    <meta name="theme-color" content="#0a192f">
+
+    <!-- 1. Fontes Google -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&family=Oswald:wght@400;500;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+
+    <!-- 2. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              navy: {
+                900: '#0a192f',
+                800: '#112240',
+                700: '#233554',
+                custom: '#050f41',
+              },
+              medical: {
+                blue: '#00bcd4',
+                surface: '#F3F4F6',
+              }
+            },
+            fontFamily: {
+              sans: ['Carlito', 'sans-serif'],
+              heading: ['Oswald', 'sans-serif'],
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.3s ease-out',
+              'slide-up': 'slideUp 0.3s ease-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              slideUp: {
+                '0%': { transform: 'translateY(10px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <!-- 3. React e Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Ícones Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+      /* Scrollbar customizada */
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #0a192f; }
+
+      /* Toggle Switch */
+      .toggle-checkbox:checked { right: 0; border-color: #0a192f; }
+      .toggle-checkbox { right: 24px; transition: all 0.3s; }
+    </style>
+  </head>
+  <body class="bg-gray-100 text-gray-800 font-sans antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useRef } = React;
+
+      // --- CONFIGURAÇÃO MANIFEST DINÂMICO PARA PWA ---
+      const setupManifest = () => {
+        const manifest = {
+          "name": "Cadastro Médico",
+          "short_name": "Cadastro",
+          "start_url": ".",
+          "display": "standalone",
+          "background_color": "#ffffff",
+          "theme_color": "#0a192f",
+          "orientation": "portrait",
+          "icons": [
+            {
+              "src": "https://img.icons8.com/color/192/medical-doctor.png",
+              "sizes": "192x192",
+              "type": "image/png"
+            },
+            {
+              "src": "https://img.icons8.com/color/512/medical-doctor.png",
+              "sizes": "512x512",
+              "type": "image/png"
+            }
+          ]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        let link = document.querySelector('#manifest-link');
+        if (!link) {
+          link = document.createElement('link');
+          link.id = 'manifest-link';
+          link.rel = 'manifest';
+          document.head.appendChild(link);
+        }
+        link.href = manifestURL;
+      };
+      setupManifest();
+
+      // --- HOOKS ---
+      function useClickOutside(ref, handler) {
+        useEffect(() => {
+          const listener = (event) => {
+            if (!ref.current || ref.current.contains(event.target)) return;
+            handler(event);
+          };
+          document.addEventListener("mousedown", listener);
+          document.addEventListener("touchstart", listener);
+          return () => {
+            document.removeEventListener("mousedown", listener);
+            document.removeEventListener("touchstart", listener);
+          };
+        }, [ref, handler]);
+      }
+
+      // --- MÁSCARAS E VALIDAÇÕES ---
+      const masks = {
+        cpf: (value) => value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').replace(/(-\d{2})\d+?$/, '$1'),
+        nip: (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{4})(\d)/, '$1.$2.$3').substring(0, 10),
+        celular: (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').substring(0, 15),
+        cep: (value) => value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').substring(0, 9),
+        date: (value) => value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '$1/$2').replace(/(\d{2})(\d)/, '$1/$2').substring(0, 10)
+      };
+
+      const validateCPF = (cpf) => {
+        cpf = cpf.replace(/[^\d]+/g, '');
+        if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
+        let soma = 0, resto;
+        for (let i = 1; i <= 9; i++) soma += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+        resto = (soma * 10) % 11;
+        if ((resto === 10) || (resto === 11)) resto = 0;
+        if (resto !== parseInt(cpf.substring(9, 10))) return false;
+        soma = 0;
+        for (let i = 1; i <= 10; i++) soma += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+        resto = (soma * 10) % 11;
+        if ((resto === 10) || (resto === 11)) resto = 0;
+        if (resto !== parseInt(cpf.substring(10, 11))) return false;
+        return true;
+      };
+
+      // --- COMPONENTES MD3 CUSTOMIZADOS (Mantidos) ---
+
+      const MDInput = ({ label, id, error, readOnly, ...props }) => (
+        <div className="relative group mb-1 animate-fade-in">
+          <input id={id} placeholder=" " readOnly={readOnly} {...props} className={`peer block w-full rounded-t-lg border-b-2 bg-gray-50 px-3 pb-2.5 pt-6 text-gray-900 focus:border-navy-900 focus:outline-none focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${error ? 'border-red-500' : 'border-gray-300'} ${readOnly ? 'cursor-default focus:border-gray-300' : ''}`} />
+          <label htmlFor={id} className={`absolute left-3 top-4 z-10 origin-[0] -translate-y-4 scale-75 transform text-gray-500 duration-300 peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-4 peer-focus:scale-75 peer-focus:text-navy-900 ${error ? 'text-red-500' : ''}`}>{label} {error && <span className="text-xs ml-1 font-bold">(Inválido)</span>}</label>
+        </div>
+      );
+
+      const MDCustomSelect = ({ label, value, onChange, options, disabled, placeholder = "Selecione..." }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const containerRef = useRef(null);
+        useClickOutside(containerRef, () => setIsOpen(false));
+        const handleSelect = (val) => { if (!disabled) { onChange({ target: { value: val } }); setIsOpen(false); } };
+        const currentLabel = options.find(o => o.value === value)?.label || value;
+        return (
+          <div className="relative mb-1 group animate-fade-in" ref={containerRef}>
+            <div onClick={() => !disabled && setIsOpen(!isOpen)} className={`relative w-full rounded-t-lg border-b-2 bg-gray-50 px-3 pb-2.5 pt-6 text-gray-900 cursor-pointer ${isOpen ? 'border-navy-900' : 'border-gray-300'} ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-100'} transition-colors min-h-[56px]`}>
+               <span className={`${!value ? 'text-transparent' : ''} block truncate pr-6`}>{value ? currentLabel : placeholder}</span>
+               <label className={`absolute left-3 top-4 z-10 origin-[0] transform text-gray-500 duration-300 pointer-events-none ${value || isOpen ? '-translate-y-4 scale-75 text-navy-900' : 'translate-y-0 scale-100'}`}>{label}</label>
+               <div className="absolute right-3 top-4 text-gray-500"><span className="material-symbols-outlined">{isOpen ? 'arrow_drop_up' : 'arrow_drop_down'}</span></div>
+            </div>
+            {isOpen && !disabled && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto custom-scrollbar animate-slide-up">
+                 {options.length === 0 ? <div className="p-4 text-gray-500 text-sm">Sem opções</div> : options.map((opt, idx) => (
+                     <div key={idx} onClick={() => handleSelect(opt.value)} className={`px-4 py-3 cursor-pointer hover:bg-blue-50 text-sm border-b border-gray-50 last:border-0 ${value === opt.value ? 'bg-blue-50 font-bold text-navy-900' : 'text-gray-700'}`}>{opt.label}</div>
+                 ))}
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      const MDCustomAutocomplete = ({ label, value, onChange, options, disabled }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const [filter, setFilter] = useState("");
+        const containerRef = useRef(null);
+        useClickOutside(containerRef, () => setIsOpen(false));
+        useEffect(() => { if (!isOpen) setFilter(""); }, [isOpen]);
+        const filteredOptions = useMemo(() => { if (!filter) return options; const lower = filter.toLowerCase(); return options.filter(opt => opt.label.toLowerCase().includes(lower)); }, [options, filter]);
+        const handleSelect = (val) => { onChange({ target: { value: val } }); setIsOpen(false); setFilter(""); };
+        return (
+          <div className="relative mb-1 group animate-fade-in" ref={containerRef}>
+             <input type="text" placeholder=" " value={isOpen ? filter : value} onChange={(e) => { setFilter(e.target.value); if (!isOpen) setIsOpen(true); if (e.target.value === "") onChange({ target: { value: "" } }); }} onFocus={() => !disabled && setIsOpen(true)} disabled={disabled} className={`peer block w-full rounded-t-lg border-b-2 bg-gray-50 px-3 pb-2.5 pt-6 text-gray-900 focus:border-navy-900 focus:outline-none focus:ring-0 disabled:opacity-60 disabled:cursor-not-allowed transition-colors border-gray-300`} />
+             <label className={`absolute left-3 top-4 z-10 origin-[0] -translate-y-4 scale-75 transform text-gray-500 duration-300 peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 peer-focus:-translate-y-4 peer-focus:scale-75 peer-focus:text-navy-900`}>{label}</label>
+             {isOpen && !disabled && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-auto custom-scrollbar animate-slide-up">
+                   {filteredOptions.length === 0 ? <div className="p-4 text-gray-500 text-sm">Nenhum resultado.</div> : filteredOptions.map((opt, idx) => (
+                         <div key={idx} onClick={() => handleSelect(opt.label)} className="px-4 py-3 cursor-pointer hover:bg-blue-50 text-sm border-b border-gray-50 last:border-0 text-gray-700">{opt.label}</div>
+                   ))}
+                </div>
+             )}
+          </div>
+        );
+      };
+
+      const MDDateInputSimple = ({ label, value, onChange }) => {
+        const [inputValue, setInputValue] = useState("");
+        useEffect(() => {
+          if (value) { const [y, m, d] = value.split('-'); setInputValue(`${d}/${m}/${y}`); } 
+          else { if (inputValue === "") return; setInputValue(""); }
+        }, [value]);
+        const handleInputChange = (e) => {
+          const masked = masks.date(e.target.value);
+          setInputValue(masked);
+          if (masked.length === 10) {
+             const [d, m, y] = masked.split('/');
+             const dateObj = new Date(Number(y), Number(m) - 1, Number(d));
+             if (dateObj.getFullYear() === Number(y) && dateObj.getMonth() === Number(m) - 1 && dateObj.getDate() === Number(d)) {
+                onChange({ target: { value: `${y}-${m}-${d}` } });
+             }
+          } else if (masked === "") { onChange({ target: { value: "" } }); }
+        };
+        return (
+          <div className="relative mb-1 group animate-fade-in">
+             <input type="tel" placeholder=" " value={inputValue} onChange={handleInputChange} maxLength="10" className={`peer block w-full rounded-t-lg border-b-2 border-gray-300 bg-gray-50 px-3 pb-2.5 pt-6 text-gray-900 focus:border-navy-900 focus:outline-none focus:ring-0 transition-colors min-h-[56px]`} />
+             <label className={`absolute left-3 top-4 z-10 origin-[0] transform text-gray-500 duration-300 pointer-events-none ${inputValue ? '-translate-y-4 scale-75 text-navy-900' : 'peer-placeholder-shown:translate-y-0 peer-placeholder-shown:scale-100 -translate-y-4 scale-75'}`}>{label}</label>
+             <div className="absolute right-3 top-4 text-gray-500 pointer-events-none"><span className="material-symbols-outlined">calendar_month</span></div>
+          </div>
+        );
+      };
+
+      const MDUploadButton = ({ label, icon, file, onChange, onRemove, accept }) => {
+        if (file) {
+          return (
+             <div className="flex items-center justify-between bg-white border border-gray-300 rounded-xl p-4 shadow-sm animate-fade-in">
+                <div className="flex items-center gap-4 overflow-hidden">
+                   <div className="bg-green-100 p-3 rounded-full flex-shrink-0"><span className="material-symbols-outlined text-green-700">check_circle</span></div>
+                   <div className="flex flex-col overflow-hidden"><span className="font-bold text-sm text-navy-900 truncate block w-full">{file.name}</span><span className="text-xs text-green-600 font-medium uppercase">Arquivo Carregado</span></div>
+                </div>
+                <button type="button" onClick={onRemove} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50 transition-colors"><span className="material-symbols-outlined">delete</span></button>
+             </div>
+          );
+        }
+        return (
+          <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-400 rounded-xl p-6 hover:bg-blue-50 hover:border-navy-900 transition-all cursor-pointer group h-32 animate-fade-in">
+            <input type="file" accept={accept} onChange={onChange} className="hidden" />
+            <span className="material-symbols-outlined text-4xl text-gray-500 group-hover:text-navy-900 mb-2 transition-colors">{icon}</span>
+            <span className="text-sm font-medium text-gray-600 group-hover:text-navy-900 uppercase tracking-wide transition-colors">{label}</span>
+          </label>
+        );
+      };
+
+      const Toast = ({ message, type, onClose }) => {
+        if (!message) return null;
+        const bg = type === 'success' ? 'bg-green-800' : 'bg-red-800';
+        const icon = type === 'success' ? 'check_circle' : 'error';
+        return (
+          <div className={`fixed bottom-4 left-1/2 transform -translate-x-1/2 ${bg} text-white pl-4 pr-6 py-3 rounded-lg shadow-2xl flex items-center gap-3 z-50 animate-fade-in min-w-[300px]`}>
+            <span className="material-symbols-outlined">{icon}</span>
+            <span className="font-medium">{message}</span>
+            <button onClick={onClose} className="ml-auto text-white hover:bg-white/20 rounded-full p-1"><span className="material-symbols-outlined text-sm">close</span></button>
+          </div>
+        );
+      };
+
+      // --- APP PRINCIPAL ---
+      const App = () => {
+        const [loading, setLoading] = useState(true);
+        const [submitting, setSubmitting] = useState(false);
+        const [toast, setToast] = useState({ message: '', type: '' });
+        const [errors, setErrors] = useState({});
+        const [auxData, setAuxData] = useState({ faculdades: [], especialidades: [], residenciasMap: {} });
+        const [ufs, setUfs] = useState([]);
+        const [cidades, setCidades] = useState([]);
+        const [loadingCities, setLoadingCities] = useState(false);
+        const [loadingAddress, setLoadingAddress] = useState(false);
+
+        const [form, setForm] = useState({
+          nomeCompleto: '', nascimento: '', cpf: '', naturalidadeUF: '', naturalidadeCidade: '',
+          email: '', celular: '', nip: '', crm: '', cep: '', enderecoLogradouro: '', numero: '', complemento: '',
+          faculdade: '', formatura: '', especialidade: '', vagaTrancada: false, programaResidencia: '', hospital: '',
+          fotoBase64: null, fotoNome: '', fotoMime: '', docBase64: null, docNome: '', docMime: ''
+        });
+
+        // Wizard Logic
+        const showRestoSec1 = !!form.cpf && form.cpf.length >= 14 && !errors.cpf; 
+        const isSection1Complete = form.nomeCompleto && form.nip && form.cpf && form.nascimento && form.naturalidadeUF && form.naturalidadeCidade && !errors.cpf;
+        const showSection2 = isSection1Complete;
+        const showEnderecoCompleto = !!form.cep && form.cep.length >= 9;
+        const showNumeroComplemento = !!form.enderecoLogradouro;
+        const isSection2Complete = form.celular && form.email && form.cep && form.enderecoLogradouro && form.numero;
+        const showSection3 = isSection2Complete;
+        const showPdfFaculData = !!form.crm;
+        const showEspecialidade = !!form.formatura;
+        const showRestoSec3 = !!form.especialidade;
+        const showSubmit = showSection3 && showRestoSec3;
+
+        useEffect(() => {
+          google.script.run
+            .withSuccessHandler((data) => { setAuxData(data); setLoading(false); })
+            .withFailureHandler(() => showToast('Erro inicial.', 'error'))
+            .getDropdownData();
+          fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
+            .then(r => r.json()).then(data => setUfs(data.map(u => ({ label: u.sigla, value: u.sigla }))));
+        }, []);
+
+        useEffect(() => {
+          if (form.naturalidadeUF) {
+            setLoadingCities(true);
+            fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${form.naturalidadeUF}/municipios`)
+              .then(r => r.json()).then(data => { setCidades(data.map(c => ({ label: c.nome, value: c.nome }))); setLoadingCities(false); });
+          } else { setCidades([]); }
+        }, [form.naturalidadeUF]);
+
+        useEffect(() => {
+          const cepLimpo = form.cep.replace(/\D/g, '');
+          if (cepLimpo.length === 8) {
+            setLoadingAddress(true);
+            fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`)
+              .then(r => r.json()).then(data => {
+                setLoadingAddress(false);
+                if (!data.erro) { setForm(prev => ({ ...prev, enderecoLogradouro: `${data.logradouro}, ${data.bairro}, ${data.localidade} - ${data.uf}` })); } 
+                else { showToast('CEP não encontrado.', 'error'); }
+              }).catch(() => setLoadingAddress(false));
+          }
+        }, [form.cep]);
+
+        const handleChange = (e) => {
+          const { name, value, type, checked, id } = e.target;
+          const fieldName = name || id; 
+          let finalValue = type === 'checkbox' ? checked : value;
+          if (masks[fieldName]) finalValue = masks[fieldName](value);
+          setForm(prev => ({ ...prev, [fieldName]: finalValue }));
+
+          if (fieldName === 'cpf') {
+             if (finalValue.length === 14) {
+               const isValid = validateCPF(finalValue);
+               setErrors(prev => ({ ...prev, cpf: !isValid }));
+             } else { setErrors(prev => ({ ...prev, cpf: false })); }
+          }
+        };
+
+        const handleFileChange = (e, type) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              if (type === 'foto') setForm(prev => ({ ...prev, fotoBase64: reader.result, fotoNome: file.name, fotoMime: file.type }));
+              else setForm(prev => ({ ...prev, docBase64: reader.result, docNome: file.name, docMime: file.type }));
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
+        const handleRemoveFile = (type) => {
+           type === 'foto' ? setForm(prev => ({ ...prev, fotoBase64: null, fotoNome: '', fotoMime: '' })) : setForm(prev => ({ ...prev, docBase64: null, docNome: '', docMime: '' }));
+        };
+
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          if (errors.cpf) { showToast('Corrija o CPF antes de enviar.', 'error'); return; }
+          setSubmitting(true);
+          google.script.run
+            .withSuccessHandler((res) => {
+              setSubmitting(false);
+              if (res.success) { showToast(res.message, 'success'); setForm({ ...form, nomeCompleto: '', cpf: '', nip: '' }); } 
+              else { showToast(res.message, 'error'); }
+            })
+            .withFailureHandler(() => { setSubmitting(false); showToast('Erro fatal.', 'error'); })
+            .processForm(form);
+        };
+
+        const showToast = (message, type) => {
+          setToast({ message, type });
+          setTimeout(() => setToast({ message: '', type: '' }), 5000);
+        };
+
+        const faculdadeOpts = useMemo(() => auxData.faculdades.map(f => ({ label: f, value: f })), [auxData.faculdades]);
+        const especialidadeOpts = useMemo(() => auxData.especialidades.map(e => ({ label: e, value: e })), [auxData.especialidades]);
+        const programaOpts = useMemo(() => Object.keys(auxData.residenciasMap).sort().map(p => ({ label: p, value: p })), [auxData.residenciasMap]);
+        const hospitalOpts = useMemo(() => {
+           return form.programaResidencia && auxData.residenciasMap[form.programaResidencia] ? auxData.residenciasMap[form.programaResidencia].map(h => ({ label: h, value: h })) : [];
+        }, [form.programaResidencia, auxData]);
+
+        if (loading) return (
+            <div className="flex flex-col items-center justify-center h-screen bg-navy-900 text-white">
+               <span className="material-symbols-outlined text-6xl text-medical-blue animate-spin mb-4">settings</span>
+               <p className="font-heading tracking-widest text-lg">INICIANDO ECOSSISTEMA...</p>
+            </div>
+        );
+
+        return (
+          <div className="min-h-screen pb-10 bg-gray-100">
+            <Toast message={toast.message} type={toast.type} onClose={() => setToast({message:'', type:''})} />
+            <div className="max-w-4xl mx-auto bg-white md:rounded-b-2xl shadow-2xl overflow-hidden">
+              <div className="w-full bg-navy-900">
+                <img src="https://i.imgur.com/wjxT0G4.png" alt="Divisão de Medicina - Hospital Naval de Recife" className="w-full h-auto object-cover block" />
+              </div>
+              <div className="pb-6 pt-2 text-center">
+                 <h2 className="text-3xl font-heading font-bold text-navy-custom tracking-widest uppercase">CADASTRO</h2>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 md:p-8 flex flex-col gap-8 z-20 relative -mt-4">
+                {/* SEÇÃO 1 */}
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-fade-in">
+                  <h3 className="font-heading text-navy-900 text-xl mb-6 flex items-center gap-2 border-b border-gray-100 pb-2"><span className="material-symbols-outlined text-medical-blue">person</span>DADOS PESSOAIS</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="md:col-span-2"><MDInput id="nomeCompleto" label="Nome Completo" value={form.nomeCompleto} onChange={handleChange} required /></div>
+                    <div>
+                      <MDInput id="nip" label="NIP (Militar)" value={form.nip} onChange={handleChange} inputMode="numeric" required />
+                      <p className="text-xs text-gray-500 mt-1 ml-3">Formato: 00.0000.00</p>
+                    </div>
+                    <div><MDInput id="cpf" label="CPF" value={form.cpf} onChange={handleChange} maxLength="14" inputMode="numeric" required error={errors.cpf} /></div>
+                    {showRestoSec1 && (
+                      <>
+                        <div className="md:col-span-2"><MDDateInputSimple label="Data de Nascimento" value={form.nascimento} onChange={(e) => handleChange({ target: { id: 'nascimento', value: e.target.value } })} required /></div>
+                        <MDCustomSelect label="Naturalidade (Estado)" value={form.naturalidadeUF} onChange={(e) => handleChange({ target: { id: 'naturalidadeUF', value: e.target.value } })} options={ufs} />
+                        <MDCustomAutocomplete label={loadingCities ? "Carregando..." : "Naturalidade (Cidade)"} value={form.naturalidadeCidade} onChange={(e) => handleChange({ target: { id: 'naturalidadeCidade', value: e.target.value } })} options={cidades} disabled={!form.naturalidadeUF} />
+                        <div className="md:col-span-2 mt-2 animate-fade-in">
+                           <span className="text-sm font-bold text-gray-700 mb-2 block uppercase tracking-wide">Foto de Perfil (Opcional)</span>
+                           <MDUploadButton label="Enviar Selfie / Foto" icon="add_a_photo" accept="image/*" file={form.fotoBase64 ? { name: form.fotoNome } : null} onChange={(e) => handleFileChange(e, 'foto')} onRemove={() => handleRemoveFile('foto')} />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {/* SEÇÃO 2 */}
+                {showSection2 && (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-fade-in">
+                    <h3 className="font-heading text-navy-900 text-xl mb-6 flex items-center gap-2 border-b border-gray-100 pb-2"><span className="material-symbols-outlined text-medical-blue">contacts</span>CONTATO E ENDEREÇO</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                       <MDInput id="celular" label="Celular" value={form.celular} onChange={handleChange} inputMode="tel" maxLength="15" required />
+                       <MDInput id="email" label="E-mail" value={form.email} onChange={handleChange} type="email" required />
+                       <div className="relative md:col-span-2">
+                          <MDInput id="cep" label="CEP" value={form.cep} onChange={handleChange} maxLength="9" required />
+                          {loadingAddress && <div className="absolute right-3 top-4"><span className="material-symbols-outlined animate-spin text-navy-900">progress_activity</span></div>}
+                       </div>
+                       {showEnderecoCompleto && <div className="md:col-span-2"><MDInput id="enderecoLogradouro" label="Endereço Completo" value={form.enderecoLogradouro} readOnly /></div>}
+                       {showNumeroComplemento && (
+                          <>
+                            <MDInput id="numero" label="Número" value={form.numero} onChange={handleChange} required />
+                            <MDInput id="complemento" label="Complemento" value={form.complemento} onChange={handleChange} />
+                          </>
+                       )}
+                    </div>
+                  </div>
+                )}
+                {/* SEÇÃO 3 */}
+                {showSection3 && (
+                  <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm animate-fade-in">
+                    <h3 className="font-heading text-navy-900 text-xl mb-6 flex items-center gap-2 border-b border-gray-100 pb-2"><span className="material-symbols-outlined text-medical-blue">work</span>DADOS PROFISSIONAIS</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                       <div className="md:col-span-2"><MDInput id="crm" label="CRM PE" value={form.crm} onChange={handleChange} required /></div>
+                       {showPdfFaculData && (
+                         <>
+                            <div className="md:col-span-2 mt-2">
+                               <span className="text-sm font-bold text-gray-700 mb-2 block uppercase tracking-wide">Carteira do CRM (PDF) - Opcional</span>
+                               <MDUploadButton label="Enviar PDF do CRM" icon="cloud_upload" accept="application/pdf" file={form.docBase64 ? { name: form.docNome } : null} onChange={(e) => handleFileChange(e, 'doc')} onRemove={() => handleRemoveFile('doc')} />
+                            </div>
+                            <MDCustomSelect label="Faculdade" value={form.faculdade} onChange={(e) => handleChange({ target: { id: 'faculdade', value: e.target.value } })} options={faculdadeOpts} />
+                            <MDDateInputSimple label="Data de Formatura" value={form.formatura} onChange={(e) => handleChange({ target: { id: 'formatura', value: e.target.value } })} />
+                         </>
+                       )}
+                       {showEspecialidade && <div className="md:col-span-2"><MDCustomSelect label="Especialidade Pretendida" value={form.especialidade} onChange={(e) => handleChange({ target: { id: 'especialidade', value: e.target.value } })} options={especialidadeOpts} /></div>}
+                    </div>
+                    {showRestoSec3 && (
+                      <div className="mt-8 border-t border-gray-100 pt-6 animate-fade-in">
+                         <div className="flex items-center gap-3 mb-6">
+                            <div className="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="vagaTrancada" id="vagaTrancada" checked={form.vagaTrancada} onChange={handleChange} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-300 checked:right-0 checked:border-navy-900 transition-all duration-300" />
+                                <label htmlFor="vagaTrancada" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-300 ${form.vagaTrancada ? 'bg-navy-900' : 'bg-gray-300'}`}></label>
+                            </div>
+                            <label htmlFor="vagaTrancada" className="font-heading text-navy-900 font-bold cursor-pointer select-none uppercase tracking-wide">Possui Residência? (Vaga Trancada)</label>
+                         </div>
+                         {form.vagaTrancada && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-fade-in bg-gray-50 p-4 rounded-lg border border-gray-200">
+                               <MDCustomSelect label="Programa de Residência" value={form.programaResidencia} onChange={(e) => handleChange({ target: { id: 'programaResidencia', value: e.target.value } })} options={programaOpts} />
+                               <MDCustomSelect label="Hospital" value={form.hospital} onChange={(e) => handleChange({ target: { id: 'hospital', value: e.target.value } })} options={hospitalOpts} disabled={!form.programaResidencia} />
+                            </div>
+                         )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {showSubmit && (
+                  <div className="pt-2 animate-fade-in">
+                    <button type="submit" disabled={submitting} className="w-full bg-navy-900 hover:bg-navy-800 text-white font-heading font-bold text-lg py-4 rounded-xl shadow-lg transform transition hover:-translate-y-1 hover:shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                      {submitting ? <><span className="material-symbols-outlined animate-spin">progress_activity</span>PROCESSANDO...</> : <><span className="material-symbols-outlined">send</span>ENVIAR CADASTRO</>}
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+            <footer className="text-center mt-12 text-gray-400 text-sm pb-8 font-light">&copy; {new Date().getFullYear()} Ecossistema Médico de Precisão.</footer>
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
